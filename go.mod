@@ -1,4 +1,4 @@
-module github.com/nathanleary/neural-net-test-10
+module github.com/nathanleary/neural-net-test10
 
 go 1.13
 
