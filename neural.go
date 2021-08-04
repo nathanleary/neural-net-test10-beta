@@ -68,19 +68,30 @@ func (n *Neural) Refine(data training.Examples) {
 		}
 
 		// update bonds
+		
+		rkb := r.Intn(len(l.Neurons[rj].In))
+		
+		for len(l.Neurons[rj].In[rk].Bond) <= rkb {
+			l.Neurons[rj].In[rk].Bond = append(l.Neurons[rj].In[rk].Bond, 1.0)
+		}
+		
 		random = r.Float32()*2 - 1.0
-		randInc = l.Neurons[rj].In[rk].Bond * random
-		l.Neurons[rj].In[rk].Bond += randInc
+		randInc = l.Neurons[rj].In[rk].Bond[rkb] * random
+		
+		
+		
+		
+		l.Neurons[rj].In[rk].Bond[rkb] += randInc
 
 		d = n.calcDistance(training)
 		if dist >= d {
 			dist = d
 		} else {
-			l.Neurons[rj].In[rk].Bond -= randInc * 2
+			l.Neurons[rj].In[rk].Bond[rkb] -= randInc * 2
 			if dist >= d {
 				dist = d
 			} else {
-				l.Neurons[rj].In[rk].Bond += randInc
+				l.Neurons[rj].In[rk].Bond[rkb] += randInc
 			}
 		}
 		// }
