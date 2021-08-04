@@ -17,8 +17,11 @@ func NewNeuron(activation ActivationType) *Neuron {
 
 func (n *Neuron) fire(training bool) {
 	var sum float32
-	for _, s := range n.In {
-		sum += s.Out * s.Bond
+	for i, s := range n.In {
+		for len(s.Bond) <= i {
+			s.Bond = append(s.Bond, 1.0)	
+		}
+		sum += s.Out * s.Bond[i]
 	}
 	n.Value = n.Activate(sum, training)
 
@@ -43,14 +46,14 @@ type Synapse struct {
 	Weight  float32
 	In, Out float32 `json:"-"`
 	IsBias  bool
-	Bond float32
+	Bond []float32
 }
 
 // NewSynapse returns a synapse with the specified initialized weight
 func NewSynapse(weight float32) *Synapse {
 	return &Synapse{
 		Weight: weight,
-		Bond: 1.0,
+		Bond: []float32{},
 	}
 }
 
