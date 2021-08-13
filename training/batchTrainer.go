@@ -5,6 +5,7 @@ import (
 	"time"
 
 	deep "github.com/nathanleary/neural-net-test10"
+	model "github.com/nathanleary/neural-net-test10/training/model"
 )
 
 // BatchTrainer implements parallelized batch training
@@ -61,22 +62,34 @@ func NewBatchTrainer(solver Solver, verbosity, batchSize, parallelism int) *Batc
 }
 
 // Train trains n
-func (t *BatchTrainer) Train(n *deep.Neural, examples, validation Examples, iterations int) {
+func (t *BatchTrainer) Train(n *deep.Neural, examples, validation model.Examples, iterations int) {
+
+	if n.Config.Bonds != 0.0 {
+		for i := len(n.Layers) - 1; i >= 0; i-- {
+			l := n.Layers[i]
+			for _, _ = range l.Neurons {
+				n.RefineBonds(examples, n.Config.Bonds)
+			}
+		}
+	}
+
 	t.internalb = newBatchTraining(n.Layers, t.parallelism)
 
-	train := make(Examples, len(examples))
+	train := make(model.Examples, len(examples))
 	copy(train, examples)
 
-	workCh := make(chan Example, t.parallelism)
+	workCh := make(chan model.Example, t.parallelism)
 	nets := make([]*deep.Neural, t.parallelism)
 
 	wg := sync.WaitGroup{}
 	for i := 0; i < t.parallelism; i++ {
 		nets[i] = deep.NewNeural(n.Config)
 
-		go func(id int, workCh <-chan Example) {
+		go func(id int, workCh <-chan model.Example) {
+
 			n := nets[id]
 			for e := range workCh {
+
 				n.Forward(e.Input, true)
 				t.calculateDeltas(n, e.Response, id)
 				wg.Done()
@@ -89,6 +102,7 @@ func (t *BatchTrainer) Train(n *deep.Neural, examples, validation Examples, iter
 
 	ts := time.Now()
 	for it := 1; it <= iterations; it++ {
+
 		train.Shuffle()
 		batches := train.SplitSize(t.batchSize)
 
@@ -118,11 +132,13 @@ func (t *BatchTrainer) Train(n *deep.Neural, examples, validation Examples, iter
 			}
 
 			t.update(n, it)
+
 		}
 
 		if t.verbosity > 0 && it%t.verbosity == 0 && len(validation) > 0 {
 			t.printer.PrintProgress(n, validation, time.Since(ts), it)
 		}
+
 	}
 }
 

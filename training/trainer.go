@@ -4,11 +4,12 @@ import (
 	"time"
 
 	deep "github.com/nathanleary/neural-net-test10"
+	model "github.com/nathanleary/neural-net-test10/training/model"
 )
 
 // Trainer is a neural network trainer
 type Trainer interface {
-	Train(n *deep.Neural, examples, validation Examples, iterations int)
+	Train(n *deep.Neural, examples, validation model.Examples, iterations int)
 }
 
 // OnlineTrainer is a basic, online network trainer
@@ -43,10 +44,20 @@ func newTraining(layers []*deep.Layer) *internal {
 }
 
 // Train trains n
-func (t *OnlineTrainer) Train(n *deep.Neural, examples, validation Examples, iterations int) {
+func (t *OnlineTrainer) Train(n *deep.Neural, examples, validation model.Examples, iterations int) {
+
+	if n.Config.Bonds != 0.0 {
+		for i := len(n.Layers) - 1; i >= 0; i-- {
+			l := n.Layers[i]
+			for _, _ = range l.Neurons {
+				n.RefineBonds(examples, n.Config.Bonds)
+			}
+		}
+	}
+
 	t.internal = newTraining(n.Layers)
 
-	train := make(Examples, len(examples))
+	train := make(model.Examples, len(examples))
 	copy(train, examples)
 
 	t.printer.Init(n)
@@ -54,17 +65,22 @@ func (t *OnlineTrainer) Train(n *deep.Neural, examples, validation Examples, ite
 
 	ts := time.Now()
 	for i := 1; i <= iterations; i++ {
+
 		examples.Shuffle()
+
 		for j := 0; j < len(examples); j++ {
+
 			t.learn(n, examples[j], i)
 		}
+
 		if t.verbosity > 0 && i%t.verbosity == 0 && len(validation) > 0 {
 			t.printer.PrintProgress(n, validation, time.Since(ts), i)
 		}
 	}
 }
 
-func (t *OnlineTrainer) learn(n *deep.Neural, e Example, it int) {
+func (t *OnlineTrainer) learn(n *deep.Neural, e model.Example, it int) {
+
 	n.Forward(e.Input, true)
 	t.calculateDeltas(n, e.Response)
 	t.update(n, it)
