@@ -6,8 +6,63 @@ import (
 	"time"
 
 	math "github.com/chewxy/math32"
-	"github.com/nathanleary/neural-net-test10/training"
+	model "github.com/nathanleary/neural-net-test10/training/model"
 )
+
+// Example is an input-target pair
+type Example struct {
+	Input    []float32
+	Response []float32
+}
+
+// Examples is a set of input-output pairs
+type Examples []Example
+
+// Shuffle shuffles slice in-place
+func (e Examples) Shuffle() {
+	for i := range e {
+		j := rand.Intn(i + 1)
+		e[i], e[j] = e[j], e[i]
+	}
+}
+
+// Split assigns each element to two new slices
+// according to probability p
+func (e Examples) Split(p float32) (first, second Examples) {
+	for i := 0; i < len(e); i++ {
+		if p > rand.Float32() {
+			first = append(first, e[i])
+		} else {
+			second = append(second, e[i])
+		}
+	}
+	return
+}
+
+// SplitSize splits slice into parts of size size
+func (e Examples) SplitSize(size int) []Examples {
+	res := make([]Examples, 0)
+	for i := 0; i < len(e); i += size {
+		res = append(res, e[i:min(i+size, len(e))])
+	}
+	return res
+}
+
+// SplitN splits slice into n parts
+func (e Examples) SplitN(n int) []Examples {
+	res := make([]Examples, n)
+	for i, el := range e {
+		res[i%n] = append(res[i%n], el)
+	}
+	return res
+}
+
+func min(a, b int) int {
+	if a <= b {
+		return a
+	}
+	return b
+}
 
 // Neural is a neural network
 type Neural struct {
@@ -35,12 +90,15 @@ type Config struct {
 	Loss LossType
 	// Apply bias nodes
 	Bias bool
+	//Update Bonds
+	Bonds float32
 }
 
-func (n *Neural) Refine(data training.Examples) {
+func (n *Neural) Refine(data model.Examples, lr float32) float32 {
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	training, _ := data.Split(1.0 / float32(len(data)) * 1.0)
+	training := data //.Split(1.0 / float32(len(data)) * 1.0)
 	dist := n.calcDistance(training)
 
 	for x := 0; x < 2; x++ {
@@ -51,7 +109,7 @@ func (n *Neural) Refine(data training.Examples) {
 		rk := r.Intn(len(l.Neurons[rj].In))
 
 		//update weights
-		random := r.Float32()*2 - 1.0
+		random := (r.Float32()*2 - 1.0) * lr
 		randInc := l.Neurons[rj].In[rk].Weight * random
 		l.Neurons[rj].In[rk].Weight += randInc
 
@@ -68,19 +126,16 @@ func (n *Neural) Refine(data training.Examples) {
 		}
 
 		// update bonds
-		
+
 		rkb := r.Intn(len(l.Neurons[rj].In))
-		
+
 		for len(l.Neurons[rj].In[rk].Bond) <= rkb {
 			l.Neurons[rj].In[rk].Bond = append(l.Neurons[rj].In[rk].Bond, 1.0)
 		}
-		
+
 		random = r.Float32()*2 - 1.0
 		randInc = l.Neurons[rj].In[rk].Bond[rkb] * random
-		
-		
-		
-		
+
 		l.Neurons[rj].In[rk].Bond[rkb] += randInc
 
 		d = n.calcDistance(training)
@@ -96,22 +151,126 @@ func (n *Neural) Refine(data training.Examples) {
 		}
 		// }
 	}
-
+	return dist
 }
 
-func (n *Neural) calcDistance(training2 training.Examples) float32 {
+func (n *Neural) RefineWeights(data model.Examples, lr float32) float32 {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	training := data //data.Split(1.0 / float32(len(data)) * 1.0)
+	dist := n.calcDistance(training)
+
+	for x := 0; x < 2; x++ {
+		l := n.Layers[r.Intn(len(n.Layers))]
+		// for _, l := range n.Layers {
+
+		rj := r.Intn(len(l.Neurons))
+		rk := r.Intn(len(l.Neurons[rj].In))
+
+		//update weights
+		random := (r.Float32()*2 - 1.0) * lr
+		randInc := l.Neurons[rj].In[rk].Weight * random
+		l.Neurons[rj].In[rk].Weight += randInc
+
+		d := n.calcDistance(training)
+		if dist >= d {
+			dist = d
+		} else {
+			l.Neurons[rj].In[rk].Weight -= randInc * 2
+			if dist >= d {
+				dist = d
+			} else {
+				l.Neurons[rj].In[rk].Weight += randInc
+			}
+		}
+
+		// }
+	}
+	return dist
+}
+
+func (n *Neural) CalcDistance(training2 model.Examples) float32 {
+	return n.calcDistance(training2)
+}
+
+func (n *Neural) RefineBonds(data model.Examples, lr float32) float32 {
+	// fmt.Println("test")
+	// time.Sleep(time.Millisecond)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	training := data //data.Split(1.0 / float32(len(data)) * 1.0)
+	dist := n.calcDistance(training)
+
+	for x := 0; x < 2; x++ {
+		l := n.Layers[r.Intn(len(n.Layers))]
+		// for _, l := range n.Layers {
+
+		rj := r.Intn(len(l.Neurons))
+		rk := r.Intn(len(l.Neurons[rj].In))
+
+		// //update weights
+		// random := (r.Float32()*2 - 1.0) * lr
+		// randInc := l.Neurons[rj].In[rk].Weight * random
+		// l.Neurons[rj].In[rk].Weight += randInc
+
+		// d := n.calcDistance(training)
+		// if dist >= d {
+		// 	dist = d
+		// } else {
+		// 	l.Neurons[rj].In[rk].Weight -= randInc * 2
+		// 	if dist >= d {
+		// 		dist = d
+		// 	} else {
+		// 		l.Neurons[rj].In[rk].Weight += randInc
+		// 	}
+		// }
+
+		// update bonds
+
+		rkb := r.Intn(len(l.Neurons[rj].In))
+
+		for len(l.Neurons[rj].In[rk].Bond) <= rkb {
+			l.Neurons[rj].In[rk].Bond = append(l.Neurons[rj].In[rk].Bond, 1.0)
+		}
+
+		random := (r.Float32()*2 - 1.0) * lr
+		randInc := random //l.Neurons[rj].In[rk].Bond[rkb] * random
+
+		l.Neurons[rj].In[rk].Bond[rkb] += randInc
+
+		d := n.calcDistance(training)
+		if dist >= d {
+			dist = d
+		} else {
+			l.Neurons[rj].In[rk].Bond[rkb] -= randInc * 2
+			if dist >= d {
+				dist = d
+			} else {
+				l.Neurons[rj].In[rk].Bond[rkb] += randInc
+			}
+		}
+		// }
+	}
+	return dist
+}
+
+func (n *Neural) calcDistance(training2 model.Examples) float32 {
 	var diff float32 = 0.0
 
 	for _, v := range training2 {
+		prediction := n.Predict(v.Input)
 		for ri, _ := range v.Response {
-			if v.Response[ri] == 0.0 {
-				p := n.Predict(v.Input)[ri]
-				if p != 0.0 {
-					diff += math.Abs(p)
-				}
-			} else {
-				diff += (math.Abs((n.Predict(v.Input)[ri]) - (v.Response[ri])))
-			}
+			// if v.Response[ri] == 0.0 {
+			// p := prediction[ri]
+			// if p != 0.0 {
+			// diff += math.Abs(p)
+			// }
+			// } else {
+			diff += (math.Abs((prediction[ri]) - (v.Response[ri])))
+			// }
+
+			// fmt.Println(prediction[ri], v.Response[ri])
+			// time.Sleep(time.Microsecond)
 
 		}
 	}
